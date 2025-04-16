@@ -40,6 +40,11 @@ pip-delete-this-directory.txt
 logs/
 *.log
 
+# Uploaded and processed files
+uploads/
+src/doc_improver/uploads/
+*.docx
+
 # Unit test / coverage reports
 htmlcov/
 .tox/
