@@ -1,17 +1,35 @@
 """Test configuration for DocImprover."""
 import os
 import pytest
+from datetime import datetime, timedelta
+from pathlib import Path
 from docx import Document
 from doc_improver.app import app as flask_app
 from doc_improver.document_processor import DocumentProcessor
 
 @pytest.fixture
-def app():
-    """Create a test Flask application."""
+def app(tmp_path):
+    """Create a test Flask application with temporary upload directory."""
+    upload_dir = tmp_path / "uploads"
+    upload_dir.mkdir(exist_ok=True)
+    
     flask_app.config.update({
         "TESTING": True,
+        "UPLOAD_FOLDER": str(upload_dir),
+        "FILE_CLEANUP_AGE": timedelta(hours=1)
     })
+    
     yield flask_app
+    
+    # Cleanup after tests
+    if upload_dir.exists():
+        # Walk bottom-up to ensure we delete files before directories
+        for root, dirs, files in os.walk(str(upload_dir), topdown=False):
+            for name in files:
+                os.unlink(os.path.join(root, name))
+            for name in dirs:
+                os.rmdir(os.path.join(root, name))
+        upload_dir.rmdir()
 
 @pytest.fixture
 def client(app):
@@ -55,3 +73,33 @@ def temp_docx(tmp_path, sample_doc):
     file_path = tmp_path / "test.docx"
     sample_doc.save(file_path)
     return file_path
+
+@pytest.fixture
+def old_session_dir(app):
+    """Create an old session directory for testing cleanup."""
+    session_id = "test_old_session"
+    session_dir = Path(app.config['UPLOAD_FOLDER']) / session_id
+    session_dir.mkdir(exist_ok=True)
+    
+    # Create a test file in the directory
+    test_file = session_dir / "test.docx"
+    test_file.write_text("test content")
+    
+    # Set old modification time
+    old_time = datetime.now() - app.config['FILE_CLEANUP_AGE'] - timedelta(minutes=5)
+    os.utime(session_dir, (old_time.timestamp(), old_time.timestamp()))
+    
+    return session_dir
+
+@pytest.fixture
+def recent_session_dir(app):
+    """Create a recent session directory that shouldn't be cleaned up."""
+    session_id = "test_recent_session"
+    session_dir = Path(app.config['UPLOAD_FOLDER']) / session_id
+    session_dir.mkdir(exist_ok=True)
+    
+    # Create a test file in the directory
+    test_file = session_dir / "test.docx"
+    test_file.write_text("test content")
+    
+    return session_dir

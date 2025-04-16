@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DocImprover - AI-Powered Document Improvement</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="bg-gray-100 min-h-screen py-8">
+    <div class="container mx-auto px-4">
+        <h1 class="text-3xl font-bold text-center mb-8 text-blue-800">DocImprover</h1>
+        <div class="max-w-7xl mx-auto">
+            <div id="dropZone" class="border-2 border-dashed border-blue-300 rounded-lg p-8 text-center mb-8 bg-white hover:border-blue-500 transition-colors duration-200">
+                <div class="mb-4">
+                    <svg class="w-12 h-12 mx-auto text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path>
+                    </svg>
+                </div>
+                <p class="text-gray-600 mb-2">Drop your document here or</p>
+                <input type="file" id="fileInput" class="hidden" accept=".docx">
+                <button onclick="document.getElementById('fileInput').click()" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors duration-200">
+                    Choose File
+                </button>
+                <p class="text-sm text-gray-500 mt-2">Supported format: .docx</p>
+            </div>
+
+            <div id="results" class="hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 xl:gap-12">
+                    <div class="p-4 rounded-lg border border-gray-200 diff-highlight">
+                        <h2 class="text-xl font-semibold mb-4 text-gray-700">Original Text</h2>
+                        <div id="originalText" class="prose max-w-none text-gray-800 whitespace-pre-wrap mb-4"></div>
+                    </div>
+                    <div class="p-4 rounded-lg border border-gray-200 diff-highlight bg-blue-50">
+                        <h2 class="text-xl font-semibold mb-4 text-blue-700">Improved Version</h2>
+                        <div id="improvements" class="prose max-w-none text-gray-800 mb-4"></div>
+                        <div id="downloadContainer" class="hidden">
+                            <a id="downloadLink" href="#" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200">
+                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                </svg>
+                                Download Improved Document
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="loadingSpinner" class="hidden">
+                <div class="flex items-center justify-center">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                    <span class="ml-2 text-blue-600">Processing document...</span>
+                </div>
+            </div>
+
+            <div id="errorMessage" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
+                <span id="errorText"></span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const results = document.getElementById('results');
+        const originalText = document.getElementById('originalText');
+        const improvements = document.getElementById('improvements');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const errorMessage = document.getElementById('errorMessage');
+        const errorText = document.getElementById('errorText');
+        const downloadContainer = document.getElementById('downloadContainer');
+        const downloadLink = document.getElementById('downloadLink');
+
+        // Prevent default drag behaviors
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+
+        // Highlight drop zone when item is dragged over it
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
+
+        function preventDefaults (e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        function highlight(e) {
+            dropZone.classList.add('border-blue-500');
+            dropZone.classList.remove('border-blue-300');
+        }
+
+        function unhighlight(e) {
+            dropZone.classList.add('border-blue-300');
+            dropZone.classList.remove('border-blue-500');
+        }
+
+        // Handle dropped files
+        dropZone.addEventListener('drop', handleDrop, false);
+        fileInput.addEventListener('change', handleFileSelect, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+            handleFiles(files);
+        }
+
+        function handleFileSelect(e) {
+            const files = e.target.files;
+            handleFiles(files);
+        }
+
+        function handleFiles(files) {
+            if (files.length === 0) return;
+            
+            const file = files[0];
+            if (!file.name.endsWith('.docx')) {
+                showError('Please upload a Word document (.docx)');
+                return;
+            }
+
+            uploadFile(file);
+        }
+
+        function showError(message) {
+            errorText.textContent = message;
+            errorMessage.classList.remove('hidden');
+            loadingSpinner.classList.add('hidden');
+            setTimeout(() => {
+                errorMessage.classList.add('hidden');
+            }, 5000);
+        }
+
+        function uploadFile(file) {
+            errorMessage.classList.add('hidden');
+            loadingSpinner.classList.remove('hidden');
+            results.classList.add('hidden');
+            downloadContainer.classList.add('hidden');
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                loadingSpinner.classList.add('hidden');
+                
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+
+                // Display results
+                originalText.textContent = data.original_text;
+                improvements.innerHTML = marked.parse(data.improvements);
+                results.classList.remove('hidden');
+                
+                // Set up download link
+                downloadLink.href = `/download/${data.improved_file}`;
+                downloadContainer.classList.remove('hidden');
+            })
+            .catch(error => {
+                loadingSpinner.classList.add('hidden');
+                showError('Error processing document. Please try again.');
+                console.error('Error:', error);
+            });
+        }
+    </script>
+</body>
+</html>
