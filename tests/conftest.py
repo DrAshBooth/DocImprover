@@ -1,11 +1,23 @@
 """Test configuration for DocImprover."""
 import os
 import pytest
+import shutil
 from datetime import datetime, timedelta
 from pathlib import Path
 from docx import Document
+from docx.shared import Inches
 from doc_improver.app import app as flask_app
 from doc_improver.document_processor import DocumentProcessor
+import io
+from PIL import Image
+
+def create_test_image(width=200, height=200):
+    """Create a test image."""
+    image = Image.new('RGB', (width, height), color='red')
+    img_byte_arr = io.BytesIO()
+    image.save(img_byte_arr, format='PNG')
+    img_byte_arr.seek(0)
+    return img_byte_arr
 
 @pytest.fixture
 def app(tmp_path):
@@ -22,14 +34,11 @@ def app(tmp_path):
     yield flask_app
     
     # Cleanup after tests
-    if upload_dir.exists():
-        # Walk bottom-up to ensure we delete files before directories
-        for root, dirs, files in os.walk(str(upload_dir), topdown=False):
-            for name in files:
-                os.unlink(os.path.join(root, name))
-            for name in dirs:
-                os.rmdir(os.path.join(root, name))
-        upload_dir.rmdir()
+    try:
+        if upload_dir.exists():
+            shutil.rmtree(upload_dir, ignore_errors=True)
+    except Exception:
+        pass  # Ignore cleanup errors
 
 @pytest.fixture
 def client(app):
@@ -38,41 +47,74 @@ def client(app):
 
 @pytest.fixture
 def mock_openai(monkeypatch):
-    """Mock OpenAI API responses."""
-    class MockResponse:
-        def __init__(self, content):
-            self.content = content
-            self.model = "gpt-4"
-
-        @property
-        def choices(self):
-            return [type('Choice', (), {'message': type('Message', (), {'content': self.content})()})]
-
+    """Mock OpenAI API for testing."""
     class MockOpenAI:
+        class ChatCompletion:
+            class Response:
+                def __init__(self, text):
+                    self.choices = [type('Choice', (), {'message': type('Message', (), {'content': text})()})]
+                    self.model = "gpt-4"
+
+            @staticmethod
+            def create(*args, **kwargs):
+                # Extract original text from user message
+                text = next(msg['content'] for msg in kwargs['messages'] if msg['role'] == 'user')
+                # Preserve image placeholders in the response
+                placeholders = []
+                for line in text.split('\n'):
+                    if '[IMAGE:' in line:
+                        placeholders.append(line.strip())
+                
+                # Create improved text with preserved image placeholders
+                improved_text = ["# Improved Document", ""]
+                improved_text.extend(placeholders)
+                improved_text.append("This is the improved content.")
+                return MockOpenAI.ChatCompletion.Response('\n'.join(improved_text))
+
         def __init__(self, api_key=None, base_url=None):
-            self.chat = type('Chat', (), {
-                'completions': type('Completions', (), {
-                    'create': lambda **kwargs: MockResponse("# Improved Title\n\nThis is the **improved** text.")
-                })()
-            })()
+            self.chat = type('Chat', (), {'completions': self.ChatCompletion})()
 
     monkeypatch.setattr("openai.OpenAI", MockOpenAI)
     return MockOpenAI
 
 @pytest.fixture
 def sample_doc():
-    """Create a sample Word document for testing."""
+    """Create a sample document for testing."""
     doc = Document()
     doc.add_heading('Test Document', 0)
     doc.add_paragraph('This is a test paragraph.')
+    doc.add_paragraph('This is another paragraph with some formatting.')
     return doc
 
 @pytest.fixture
-def temp_docx(tmp_path, sample_doc):
-    """Save a sample document to a temporary file."""
-    file_path = tmp_path / "test.docx"
-    sample_doc.save(file_path)
-    return file_path
+def sample_doc_with_images():
+    """Create a sample document with embedded images for testing."""
+    doc = Document()
+    doc.add_heading('Test Document with Images', 0)
+    doc.add_paragraph('This is a paragraph before the image.')
+    
+    # Add first test image
+    img_bytes1 = create_test_image()
+    doc.add_picture(img_bytes1, width=Inches(2.0))
+    
+    doc.add_paragraph('This is a paragraph between images.')
+    
+    # Add second test image
+    img_bytes2 = create_test_image(width=300, height=300)
+    doc.add_picture(img_bytes2, width=Inches(3.0))
+    
+    doc.add_paragraph('This is a paragraph after the image.')
+    return doc
+
+@pytest.fixture
+def temp_docx(tmp_path):
+    """Create a temporary Word document."""
+    doc_path = tmp_path / "test.docx"
+    doc = Document()
+    doc.add_heading('Test Document', 0)
+    doc.add_paragraph('This is a test paragraph.')
+    doc.save(doc_path)
+    return doc_path
 
 @pytest.fixture
 def old_session_dir(app):

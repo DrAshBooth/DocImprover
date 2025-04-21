@@ -5,8 +5,70 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DocImprover - AI-Powered Document Improvement</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            content: ["./**/*.{html,js}"],
+            theme: {
+                extend: {
+                    typography: {
+                        DEFAULT: {
+                            css: {
+                                maxWidth: 'none',
+                            },
+                        },
+                    },
+                },
+            },
+            plugins: [],
+        }
+    </script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <style type="text/tailwindcss">
+        @layer components {
+            .markdown-content h1 {
+                @apply text-4xl font-bold mb-6 mt-8 text-gray-900 border-b pb-2;
+            }
+            .markdown-content h2 {
+                @apply text-3xl font-bold mb-4 mt-6 text-gray-800;
+            }
+            .markdown-content h3 {
+                @apply text-2xl font-semibold mb-3 mt-5 text-gray-800;
+            }
+            .markdown-content h4 {
+                @apply text-xl font-semibold mb-2 mt-4 text-gray-800;
+            }
+            .markdown-content p {
+                @apply mb-4 text-gray-700 leading-relaxed;
+            }
+            .markdown-content ul {
+                @apply list-disc list-inside mb-4 text-gray-700 pl-4;
+            }
+            .markdown-content ol {
+                @apply list-decimal list-inside mb-4 text-gray-700 pl-4;
+            }
+            .markdown-content li {
+                @apply mb-1;
+            }
+            .markdown-content code {
+                @apply px-1 py-0.5 bg-gray-100 rounded text-sm font-mono text-gray-800;
+            }
+            .markdown-content pre {
+                @apply p-4 bg-gray-100 rounded-lg mb-4 overflow-x-auto;
+            }
+            .markdown-content pre code {
+                @apply bg-transparent p-0;
+            }
+            .markdown-content blockquote {
+                @apply pl-4 border-l-4 border-gray-300 italic text-gray-600 my-4;
+            }
+            .markdown-content a {
+                @apply text-blue-600 hover:text-blue-800 underline;
+            }
+            .markdown-content hr {
+                @apply my-6 border-gray-200;
+            }
+        }
+    </style>
 </head>
 <body class="bg-gray-100 min-h-screen py-8">
     <div class="container mx-auto px-4">
@@ -28,13 +90,13 @@
 
             <div id="results" class="hidden">
                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 xl:gap-12">
-                    <div class="p-4 rounded-lg border border-gray-200 diff-highlight">
+                    <div class="p-6 rounded-lg border border-gray-200 diff-highlight">
                         <h2 class="text-xl font-semibold mb-4 text-gray-700">Original Text</h2>
-                        <div id="originalText" class="prose max-w-none text-gray-800 whitespace-pre-wrap mb-4"></div>
+                        <div id="originalText" class="max-w-none text-gray-800 whitespace-pre-wrap mb-4"></div>
                     </div>
-                    <div class="p-4 rounded-lg border border-gray-200 diff-highlight bg-blue-50">
+                    <div class="p-6 rounded-lg border border-gray-200 diff-highlight bg-blue-50">
                         <h2 class="text-xl font-semibold mb-4 text-blue-700">Improved Version</h2>
-                        <div id="improvements" class="prose max-w-none text-gray-800 mb-4"></div>
+                        <div id="improvements" class="markdown-content max-w-none text-gray-800 mb-4"></div>
                         <div id="downloadContainer" class="hidden">
                             <a id="downloadLink" href="#" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200">
                                 <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -61,6 +123,16 @@
     </div>
 
     <script>
+        // Configure marked options
+        marked.setOptions({
+            gfm: true, // GitHub Flavored Markdown
+            breaks: true, // Convert line breaks to <br>
+            headerIds: true, // Add IDs to headers
+            mangle: false, // Don't escape HTML
+            smartLists: true, // Use smarter list behavior
+            smartypants: true // Use smart punctuation
+        });
+
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
         const results = document.getElementById('results');

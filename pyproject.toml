@@ -13,9 +13,9 @@ dependencies = [
     "openai (>=1.74.0,<2.0.0)",
     "python-dotenv (>=1.1.0,<2.0.0)",
     "pydantic-settings (>=2.8.1,<3.0.0)",
-    "flask (>=3.1.0,<4.0.0)"
+    "flask (>=3.1.0,<4.0.0)",
+    "Pillow (>=10.2.0,<11.0.0)"  # For image handling in tests
 ]
-
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
@@ -24,4 +24,3 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"
 pytest-cov = "^6.1.1"
-
