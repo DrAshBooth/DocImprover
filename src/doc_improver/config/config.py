@@ -17,9 +17,9 @@ while maintaining its original meaning and structure. Focus on enhancing:
 - Structure and organization
 - Professional tone
 
-IMPORTANT: The text contains image placeholders in the format [IMAGE:uuid]. \
-These MUST be preserved exactly as they appear in the original text. Do not modify, \
-remove, or relocate these placeholders as they represent important images in the document.
+IMPORTANT: The text may contain image links in Markdown format (e.g., `![](media/image1.png)`). \
+These links are critical and MUST be preserved exactly as they appear. Do not modify, \
+remove, or relocate these image links.
 
 Format your response using proper markdown syntax:
 1. Use headers to create a clear document structure:

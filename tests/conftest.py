@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from docx import Document
 from docx.shared import Inches
-from doc_improver.app import app as flask_app
+from doc_improver.app import create_app
 from doc_improver.document_processor import DocumentProcessor
 import io
 from PIL import Image
@@ -25,13 +25,17 @@ def app(tmp_path):
     upload_dir = tmp_path / "uploads"
     upload_dir.mkdir(exist_ok=True)
     
-    flask_app.config.update({
+    # Create app with factory pattern
+    test_app = create_app({
         "TESTING": True,
         "UPLOAD_FOLDER": str(upload_dir),
-        "FILE_CLEANUP_AGE": timedelta(hours=1)
+        "FILE_CLEANUP_AGE": timedelta(hours=1),
+        "SECRET_KEY": "test_key"
     })
     
-    yield flask_app
+    # Push an application context
+    with test_app.app_context():
+        yield test_app
     
     # Cleanup after tests
     try:

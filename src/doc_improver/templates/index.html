@@ -88,61 +88,64 @@
                 <p class="text-sm text-gray-500 mt-2">Supported format: .docx</p>
             </div>
 
-            <div id="results" class="hidden">
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 xl:gap-12">
-                    <div class="p-6 rounded-lg border border-gray-200 diff-highlight">
-                        <h2 class="text-xl font-semibold mb-4 text-gray-700">Original Text</h2>
-                        <div id="originalText" class="max-w-none text-gray-800 whitespace-pre-wrap mb-4"></div>
+            <div id="loading" style="display: none;" class="flex items-center justify-center py-8">
+                <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                <span class="ml-3 text-blue-600">Processing document...</span>
+            </div>
+
+            <div id="result" style="display: none;">
+                <h2 class="text-2xl font-bold mb-4 text-center">Comparison</h2>
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <div>
+                        <h3 class="text-xl font-semibold mb-4 text-gray-700 text-center">Original</h3>
+                        <div class="p-6 rounded-lg border border-gray-200 bg-white">
+                            <div id="original-markdown" class="markdown-content"></div>
+                        </div>
                     </div>
-                    <div class="p-6 rounded-lg border border-gray-200 diff-highlight bg-blue-50">
-                        <h2 class="text-xl font-semibold mb-4 text-blue-700">Improved Version</h2>
-                        <div id="improvements" class="markdown-content max-w-none text-gray-800 mb-4"></div>
-                        <div id="downloadContainer" class="hidden">
-                            <a id="downloadLink" href="#" class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200">
-                                <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-                                </svg>
-                                Download Improved Document
-                            </a>
+                    <div>
+                        <h3 class="text-xl font-semibold mb-4 text-blue-700 text-center">Improved</h3>
+                        <div class="p-6 rounded-lg border border-blue-200 bg-blue-50">
+                            <div id="improved-markdown" class="markdown-content"></div>
                         </div>
                     </div>
                 </div>
-            </div>
-
-            <div id="loadingSpinner" class="hidden">
-                <div class="flex items-center justify-center">
-                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                    <span class="ml-2 text-blue-600">Processing document...</span>
+                <div class="mt-8 text-center">
+                    <a id="download-link" href="#" class="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200" style="display: none;">
+                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                        </svg>
+                        Download Improved Document
+                    </a>
                 </div>
             </div>
 
-            <div id="errorMessage" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4">
-                <span id="errorText"></span>
+            <div id="error-message" class="mt-8 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" style="display: none;">
+                <strong class="font-bold">Error:</strong>
+                <span class="block sm:inline" id="error-text"></span>
             </div>
         </div>
     </div>
 
     <script>
-        // Configure marked options
+        // Configure marked.js
         marked.setOptions({
-            gfm: true, // GitHub Flavored Markdown
-            breaks: true, // Convert line breaks to <br>
-            headerIds: true, // Add IDs to headers
-            mangle: false, // Don't escape HTML
-            smartLists: true, // Use smarter list behavior
-            smartypants: true // Use smart punctuation
+            gfm: true,
+            breaks: true,
+            headerIds: false,
+            mangle: false,
+            smartLists: true,
+            smartypants: false
         });
 
         const dropZone = document.getElementById('dropZone');
         const fileInput = document.getElementById('fileInput');
-        const results = document.getElementById('results');
-        const originalText = document.getElementById('originalText');
-        const improvements = document.getElementById('improvements');
-        const loadingSpinner = document.getElementById('loadingSpinner');
-        const errorMessage = document.getElementById('errorMessage');
-        const errorText = document.getElementById('errorText');
-        const downloadContainer = document.getElementById('downloadContainer');
-        const downloadLink = document.getElementById('downloadLink');
+        const resultDiv = document.getElementById('result');
+        const originalMarkdownDiv = document.getElementById('original-markdown');
+        const improvedMarkdownDiv = document.getElementById('improved-markdown');
+        const loadingDiv = document.getElementById('loading');
+        const errorMessageDiv = document.getElementById('error-message');
+        const errorTextSpan = document.getElementById('error-text');
+        const downloadLink = document.getElementById('download-link');
 
         // Prevent default drag behaviors
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
@@ -159,26 +162,25 @@
             dropZone.addEventListener(eventName, unhighlight, false);
         });
 
-        function preventDefaults (e) {
+        // Handle file selection
+        dropZone.addEventListener('drop', handleDrop, false);
+        fileInput.addEventListener('change', handleFileSelect, false);
+
+        function preventDefaults(e) {
             e.preventDefault();
             e.stopPropagation();
         }
 
-        function highlight(e) {
-            dropZone.classList.add('border-blue-500');
-            dropZone.classList.remove('border-blue-300');
+        function highlight() {
+            dropZone.classList.add('border-blue-500', 'bg-blue-50');
         }
 
-        function unhighlight(e) {
-            dropZone.classList.add('border-blue-300');
-            dropZone.classList.remove('border-blue-500');
+        function unhighlight() {
+            dropZone.classList.remove('border-blue-500', 'bg-blue-50');
         }
-
-        // Handle dropped files
-        dropZone.addEventListener('drop', handleDrop, false);
-        fileInput.addEventListener('change', handleFileSelect, false);
 
         function handleDrop(e) {
+            unhighlight();
             const dt = e.dataTransfer;
             const files = dt.files;
             handleFiles(files);
@@ -202,50 +204,50 @@
         }
 
         function showError(message) {
-            errorText.textContent = message;
-            errorMessage.classList.remove('hidden');
-            loadingSpinner.classList.add('hidden');
-            setTimeout(() => {
-                errorMessage.classList.add('hidden');
-            }, 5000);
+            errorTextSpan.textContent = message;
+            errorMessageDiv.style.display = 'block';
+            loadingDiv.style.display = 'none';
+            resultDiv.style.display = 'none';
         }
 
-        function uploadFile(file) {
-            errorMessage.classList.add('hidden');
-            loadingSpinner.classList.remove('hidden');
-            results.classList.add('hidden');
-            downloadContainer.classList.add('hidden');
+        async function uploadFile(file) {
+            errorMessageDiv.style.display = 'none';
+            loadingDiv.style.display = 'flex';
+            resultDiv.style.display = 'none';
+            downloadLink.style.display = 'none';
 
             const formData = new FormData();
             formData.append('file', file);
 
-            fetch('/upload', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => response.json())
-            .then(data => {
-                loadingSpinner.classList.add('hidden');
-                
-                if (data.error) {
-                    showError(data.error);
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                loadingDiv.style.display = 'none';
+
+                if (!response.ok) {
+                    showError(data.error || `Server error: ${response.statusText}`);
                     return;
                 }
 
-                // Display results
-                originalText.textContent = data.original_text;
-                improvements.innerHTML = marked.parse(data.improvements);
-                results.classList.remove('hidden');
-                
-                // Set up download link
-                downloadLink.href = `/download/${data.improved_file}`;
-                downloadContainer.classList.remove('hidden');
-            })
-            .catch(error => {
-                loadingSpinner.classList.add('hidden');
-                showError('Error processing document. Please try again.');
-                console.error('Error:', error);
-            });
+                if (data.success) {
+                    originalMarkdownDiv.innerHTML = marked.parse(data.original_markdown || '');
+                    improvedMarkdownDiv.innerHTML = marked.parse(data.improved_markdown || '');
+                    downloadLink.href = `/download/${data.improved_file}`;
+                    
+                    resultDiv.style.display = 'block';
+                    downloadLink.style.display = 'inline-flex';
+                } else {
+                    showError(data.error || 'An unknown error occurred.');
+                }
+            } catch (error) {
+                loadingDiv.style.display = 'none';
+                showError('An error occurred while uploading the file. Check the console for details.');
+                console.error('Upload error:', error);
+            }
         }
     </script>
 </body>
