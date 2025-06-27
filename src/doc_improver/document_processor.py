@@ -1,4 +1,14 @@
-"""Document processing module for DocImprover."""
+"""Document processing module for DocImprover.
+
+This module handles the core document processing functionality:
+- Converting between DOCX and Markdown formats
+- Handling embedded media and images
+- Integrating with OpenAI API for content improvement
+- Managing temporary files and cleanup
+
+The DocumentProcessor class provides a complete pipeline for processing
+Word documents through AI enhancement while preserving formatting and images.
+"""
 import logging
 import os
 import re
@@ -14,10 +24,24 @@ from .config.config import get_settings
 logger = logging.getLogger('docimprover')
 
 class DocumentProcessor:
-    """Process documents using OpenAI's GPT models."""
+    """Process documents using OpenAI's GPT models.
+    
+    This class handles the complete document processing pipeline:
+    1. Convert DOCX to Markdown (with image extraction)
+    2. Send Markdown content to OpenAI for improvement
+    3. Convert improved Markdown back to DOCX (re-embedding images)
+    
+    The class creates and manages temporary directories for processing
+    and implements context manager protocol for proper resource cleanup.
+    """
 
     def __init__(self):
-        """Initialize the document processor."""
+        """Initialize the document processor.
+        
+        Sets up OpenAI client with API credentials from settings,
+        creates a temporary directory for file operations, and
+        initializes tracking structures for image processing.
+        """
         settings = get_settings()
         self.client = OpenAI(
             api_key=settings.openai_api_key,
@@ -29,15 +53,29 @@ class DocumentProcessor:
         self._image_map = {}  # Initialize image map
 
     def __enter__(self):
-        """Context manager entry."""
+        """Context manager entry point.
+        
+        Enables the class to be used in with-statements for automatic
+        resource management.
+        """
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
+        """Context manager exit point.
+        
+        Automatically cleans up temporary resources when exiting the
+        with-statement context, even if an exception occurred.
+        """
         self._cleanup_temp_dir()
 
     def _cleanup_temp_dir(self) -> None:
-        """Clean up temporary directory."""
+        """Clean up temporary directory.
+        
+        Safely removes the temporary directory and all its contents.
+        This method is called automatically when the context manager exits,
+        but can also be called manually if needed. After cleanup, the
+        temporary directory reference is set to None.
+        """
         if self._temp_dir and os.path.exists(self._temp_dir):
             try:
                 shutil.rmtree(self._temp_dir, ignore_errors=True)
@@ -46,7 +84,19 @@ class DocumentProcessor:
         self._temp_dir = None
 
     def _docx_to_markdown(self, docx_path: str) -> Tuple[str, Optional[str]]:
-        """Convert a .docx file to Markdown, extracting media files."""
+        """Convert a .docx file to Markdown, extracting media files.
+        
+        This method uses Pandoc to convert Word documents to GitHub-flavored Markdown
+        while extracting embedded media (images) into a separate directory.
+        
+        Args:
+            docx_path: Path to the input .docx file
+            
+        Returns:
+            Tuple containing:
+                - Markdown string with content and image references
+                - Path to the extracted media directory (or None if no media)
+        """
         media_path = os.path.join(self._temp_dir, 'media')
         try:
             os.makedirs(media_path, exist_ok=True)
@@ -101,7 +151,17 @@ class DocumentProcessor:
             raise
 
     def _markdown_to_docx(self, markdown_str: str, output_path: str, media_path: Optional[str] = None) -> None:
-        """Convert Markdown string to a .docx file, re-embedding media from the resource path."""
+        """Convert Markdown string to a .docx file, re-embedding media from the resource path.
+        
+        This method uses Pandoc to convert Markdown back to Word format, handling image
+        re-embedding from the specified media directory. The method ensures correct path
+        references for images and sets appropriate resource paths for Pandoc.
+        
+        Args:
+            markdown_str: Markdown content to convert
+            output_path: Path where the output .docx should be saved
+            media_path: Path to directory containing media files (images)
+        """
         try:
             extra_args = []
             
@@ -232,12 +292,33 @@ class DocumentProcessor:
         """
         Improve a document by converting it to Markdown, processing with an LLM,
         and converting back to .docx.
+        
+        This is the main public API method of the DocumentProcessor class. It performs
+        the complete document improvement pipeline:
+        1. Converts DOCX to Markdown, extracting embedded media
+        2. Sends the Markdown content to OpenAI's LLM for improvement
+        3. Converts the improved Markdown back to DOCX, re-embedding media
+        
+        Args:
+            doc_path: Path to the input .docx file to be improved
+            
+        Returns:
+            Dictionary containing the following keys:
+                - original_markdown: The document's content in Markdown format
+                - improved_markdown: The LLM-improved content in Markdown format
+                - improved_docx_path: Path to the generated improved DOCX file
+                - media_path: Path to directory containing extracted media files
+                - markdown_path: Path to the saved original Markdown file
+                - success: Boolean indicating successful processing
+                
+            Or in case of error:
+                - error: Error message describing what went wrong
         """
         try:
             # 1. Convert .docx to Markdown and extract media
             original_markdown, media_path = self._docx_to_markdown(doc_path)
 
-            # Save original markdown to file for testing and compatibility
+            # Save original markdown to file for reference and diagnostics
             markdown_path = os.path.join(self._temp_dir, "original.md")
             with open(markdown_path, 'w', encoding='utf-8') as f:
                 f.write(original_markdown)

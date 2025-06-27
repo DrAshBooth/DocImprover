@@ -43,13 +43,16 @@ def ensure_session_dir(session_id: str) -> str:
 
 
 def validate_docx_file(file) -> Optional[str]:
-    """Validate uploaded file.
+    """Validate uploaded file for DOCX format and content.
+    
+    Checks if the file exists, has a filename, and has the correct .docx extension.
+    This validation ensures only valid Word documents are processed by the application.
     
     Args:
-        file: The file object from request.files
+        file: The file object from request.files in a Flask request
         
     Returns:
-        Optional[str]: Error message if invalid, None if valid
+        Optional[str]: Error message if invalid (to display to user), None if valid
     """
     if not file or not file.filename:
         return "No file selected"
@@ -63,12 +66,21 @@ def copy_files_recursively(src_dir: str, dest_dir: str, relative_path: str = "")
     
     This function traverses the source directory and copies all files to the destination,
     maintaining relative paths. It specifically handles the case of nested 'media/media' directories
-    by flattening the structure.
+    by flattening the structure, which is critical for Pandoc-extracted image compatibility.
+    
+    Special handling is included for:
+    1. Nested 'media/media' folders - these are flattened to prevent path duplication
+    2. 'nested' directories - these maintain their structure (for testing purposes)
+    3. Regular files - these maintain their relative paths
     
     Args:
-        src_dir: Source directory path
-        dest_dir: Destination directory path
-        relative_path: Current relative path within the directory structure
+        src_dir: Source directory path containing files to copy
+        dest_dir: Destination directory path where files will be copied
+        relative_path: Current relative path within the directory structure (used in recursion)
+    
+    Note:
+        This function is critical for proper image handling in the document conversion
+        process as it ensures consistent file paths for image references.
     """
     logger.info(f"Copying files from {src_dir} to {dest_dir} with relative path {relative_path}")
     
@@ -132,9 +144,19 @@ def copy_files_recursively(src_dir: str, dest_dir: str, relative_path: str = "")
 def rewrite_markdown_image_paths(markdown_text: str, session_id: str) -> str:
     """Rewrite image paths in Markdown to use the session-specific media route.
     
-    Uses a two-pass approach to guarantee all image paths are properly rewritten:
+    Uses a robust two-pass approach to guarantee all image paths are properly rewritten,
+    solving the problem of 404 errors for images in various path formats including:
+    - Relative paths (media/image.png)
+    - Absolute paths (/path/to/media/image.png)
+    - Nested paths (media/subfolder/image.png)
+    
+    The rewriting process follows these steps:
     1. First pass: Handle standard Markdown image syntax ![alt](path)
     2. Second pass: Additional check for any remaining absolute paths that might have been missed
+    
+    All paths are normalized to the format: /media/{session_id}/{filename}
+    This ensures proper image serving through Flask's media route while maintaining
+    session isolation and security.
     
     Args:
         markdown_text: The original Markdown text containing image references

@@ -148,4 +148,8 @@ def recent_session_dir(app):
     test_file = session_dir / "test.docx"
     test_file.write_text("test content")
     
+    # Set a recent modification time (current time)
+    recent_time = datetime.now()
+    os.utime(session_dir, (recent_time.timestamp(), recent_time.timestamp()))
+    
     return session_dir
